@@ -8,25 +8,26 @@ function saveData() {
   const data = {
     columns: {}
   };
-  
+
   // Get all columns
   const columns = document.querySelectorAll('.column');
   columns.forEach(column => {
     const columnId = column.id;
     const cards = [];
-    
+
     // Get all cards in this column
     const cardElements = column.querySelectorAll('.card');
     cardElements.forEach(card => {
       cards.push({
         heading: card.querySelector('.card-heading').textContent,
-        description: card.querySelector('.card-desc').textContent
+        description: card.querySelector('.card-desc').textContent,
+        dueDate: card.getAttribute('data-due-date') || ''
       });
     });
-    
+
     data.columns[columnId] = cards;
   });
-  
+
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
@@ -34,19 +35,19 @@ function saveData() {
 function loadData() {
   const savedData = localStorage.getItem(STORAGE_KEY);
   if (!savedData) return;
-  
+
   try {
     const data = JSON.parse(savedData);
-    
+
     // Load cards for each column
     Object.keys(data.columns).forEach(columnId => {
       const column = document.getElementById(columnId);
       if (column) {
         const cardList = column.querySelector('.card-list');
         const cards = data.columns[columnId];
-        
+
         cards.forEach(cardData => {
-          const card = createCard(cardData.heading, cardData.description);
+          const card = createCard(cardData.heading, cardData.description, cardData.dueDate);
           cardList.appendChild(card);
         });
       }
@@ -59,18 +60,21 @@ function loadData() {
 // Search functionality
 function initializeSearch() {
   const searchInput = document.getElementById('search-input');
+  const searchDateInput = document.getElementById('search-date');
   const clearSearchBtn = document.getElementById('clear-search');
-  
+
   searchInput.addEventListener('input', performSearch);
+  searchDateInput.addEventListener('input', performSearch);
   clearSearchBtn.addEventListener('click', clearSearch);
 }
 
 function performSearch() {
   const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
+  const searchDate = document.getElementById('search-date').value;
   const clearSearchBtn = document.getElementById('clear-search');
   const allCards = document.querySelectorAll('.card');
-  
-  if (searchTerm === '') {
+
+  if (searchTerm === '' && searchDate === '') {
     // Show all cards and remove highlighting
     allCards.forEach(card => {
       card.classList.remove('hidden', 'highlighted');
@@ -78,20 +82,25 @@ function performSearch() {
     clearSearchBtn.classList.remove('visible');
     return;
   }
-  
+
   // Show clear button
   clearSearchBtn.classList.add('visible');
-  
+
   allCards.forEach(card => {
     const heading = card.querySelector('.card-heading').textContent.toLowerCase();
     const description = card.querySelector('.card-desc').textContent.toLowerCase();
-    
-    if (heading.includes(searchTerm) || description.includes(searchTerm)) {
-      // Show and highlight matching cards
+    const dueDate = card.getAttribute('data-due-date') || '';
+    let matches = true;
+    if (searchTerm) {
+      matches = heading.includes(searchTerm) || description.includes(searchTerm);
+    }
+    if (matches && searchDate) {
+      matches = dueDate === searchDate;
+    }
+    if (matches) {
       card.classList.remove('hidden');
       card.classList.add('highlighted');
     } else {
-      // Hide non-matching cards
       card.classList.add('hidden');
       card.classList.remove('highlighted');
     }
@@ -100,26 +109,28 @@ function performSearch() {
 
 function clearSearch() {
   const searchInput = document.getElementById('search-input');
+  const searchDateInput = document.getElementById('search-date');
   const clearSearchBtn = document.getElementById('clear-search');
   const allCards = document.querySelectorAll('.card');
-  
+
   // Clear search input
   searchInput.value = '';
-  
+  searchDateInput.value = '';
+
   // Show all cards and remove highlighting
   allCards.forEach(card => {
     card.classList.remove('hidden', 'highlighted');
   });
-  
+
   // Hide clear button
   clearSearchBtn.classList.remove('visible');
-  
+
   // Focus back on search input
   searchInput.focus();
 }
 
 // Helper to create a new card element
-function createCard(heading = 'New Task', description = 'Task details...') {
+function createCard(heading = 'New Task', description = 'Task details...', dueDate = '') {
   const card = document.createElement('div');
   card.className = 'card';
   card.draggable = true; // Make card draggable
@@ -135,6 +146,17 @@ function createCard(heading = 'New Task', description = 'Task details...') {
   descElement.className = 'card-desc';
   descElement.textContent = description;
   card.appendChild(descElement);
+
+  // Due date display
+  const dueDateElement = document.createElement('div');
+  dueDateElement.className = 'card-due-date';
+  if (dueDate) {
+    dueDateElement.textContent = 'Due: ' + dueDate;
+  } else {
+    dueDateElement.textContent = '';
+  }
+  card.appendChild(dueDateElement);
+  card.setAttribute('data-due-date', dueDate);
 
   // Delete button
   const delBtn = document.createElement('button');
@@ -163,11 +185,11 @@ function showNewCardEditor(targetColumn) {
   // Create overlay
   const overlay = document.createElement('div');
   overlay.className = 'card-overlay';
-  
+
   // Create editor container
   const editor = document.createElement('div');
   editor.className = 'card-editor';
-  
+
   // Create form
   const form = document.createElement('form');
   form.innerHTML = `
@@ -176,59 +198,62 @@ function showNewCardEditor(targetColumn) {
     <input type="text" id="edit-heading" placeholder="Enter task title..." required>
     <label>Description:</label>
     <textarea id="edit-desc" placeholder="Enter task description..."></textarea>
+    <label>Due Date:</label>
+    <input type="date" id="edit-due-date">
     <div class="editor-buttons">
       <button type="submit">Create Card</button>
       <button type="button" class="cancel-btn">Cancel</button>
     </div>
   `;
-  
+
   editor.appendChild(form);
   overlay.appendChild(editor);
   document.body.appendChild(overlay);
-  
+
   // Focus on heading input
   const headingInput = document.getElementById('edit-heading');
   headingInput.focus();
-  
+
   // Handle form submission
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const newHeading = document.getElementById('edit-heading').value.trim();
     const newDesc = document.getElementById('edit-desc').value.trim();
-    
+    const newDueDate = document.getElementById('edit-due-date').value;
+
     if (newHeading) {
       // Create and add the new card
-      const card = createCard(newHeading, newDesc || 'No description');
+      const card = createCard(newHeading, newDesc || 'No description', newDueDate);
       const cardList = targetColumn.querySelector('.card-list');
       cardList.appendChild(card);
-      
+
       // Save data after adding new card
       saveData();
-      
+
       // Remove overlay
       overlay.remove();
     }
   });
-  
+
   // Handle Ctrl+Enter to submit
   form.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') {
       form.requestSubmit();
     }
   });
-  
+
   // Handle cancel
   document.querySelector('.cancel-btn').addEventListener('click', () => {
     overlay.remove();
   });
-  
+
   // Close on overlay click
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) {
       overlay.remove();
     }
   });
-  
+
   // Close on Escape key
   document.addEventListener('keydown', function closeOnEscape(e) {
     if (e.key === 'Escape') {
@@ -243,11 +268,11 @@ function showDeleteConfirmation(card) {
   // Create overlay
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  
+
   // Create confirmation modal
   const modal = document.createElement('div');
   modal.className = 'delete-modal';
-  
+
   modal.innerHTML = `
     <div class="modal-header">
       <h3>Delete Card</h3>
@@ -261,29 +286,29 @@ function showDeleteConfirmation(card) {
       <button class="delete-btn">Delete</button>
     </div>
   `;
-  
+
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
-  
+
   // Handle cancel
   modal.querySelector('.cancel-btn').addEventListener('click', () => {
     overlay.remove();
   });
-  
+
   // Handle delete
   modal.querySelector('.delete-btn').addEventListener('click', () => {
     card.remove();
     saveData(); // Save after deletion
     overlay.remove();
   });
-  
+
   // Close on overlay click
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) {
       overlay.remove();
     }
   });
-  
+
   // Close on Escape key
   document.addEventListener('keydown', function closeOnEscape(e) {
     if (e.key === 'Escape') {
@@ -307,10 +332,10 @@ function handleDragEnd(e) {
 // Initialize drag and drop for all columns
 function initializeDragAndDrop() {
   const columns = document.querySelectorAll('.column');
-  
+
   columns.forEach(column => {
     const cardList = column.querySelector('.card-list');
-    
+
     // Make card list a drop zone
     cardList.addEventListener('dragover', handleDragOver);
     cardList.addEventListener('drop', handleDrop);
@@ -337,18 +362,18 @@ function handleDrop(e) {
   e.preventDefault();
   const cardList = e.target.closest('.card-list');
   cardList.classList.remove('drag-over');
-  
+
   // Get the dragged card
   const draggedCard = document.querySelector('.dragging');
   if (draggedCard) {
     // Get the drop target (another card or the card list)
     const dropTarget = e.target.closest('.card') || cardList;
-    
+
     // If dropping on another card, insert before it
     if (dropTarget !== cardList) {
       const rect = dropTarget.getBoundingClientRect();
       const midY = rect.top + rect.height / 2;
-      
+
       if (e.clientY < midY) {
         // Insert before the target card
         dropTarget.parentNode.insertBefore(draggedCard, dropTarget);
@@ -360,7 +385,7 @@ function handleDrop(e) {
       // Dropping on empty space, append to the end
       cardList.appendChild(draggedCard);
     }
-    
+
     // Save data after moving card
     saveData();
   }
@@ -371,15 +396,16 @@ function showCardEditor(card) {
   // Create overlay
   const overlay = document.createElement('div');
   overlay.className = 'card-overlay';
-  
+
   // Create editor container
   const editor = document.createElement('div');
   editor.className = 'card-editor';
-  
+
   // Get current content
   const currentHeading = card.querySelector('.card-heading').textContent;
   const currentDesc = card.querySelector('.card-desc').textContent;
-  
+  const currentDueDate = card.getAttribute('data-due-date') || '';
+
   // Create form
   const form = document.createElement('form');
   form.innerHTML = `
@@ -388,57 +414,63 @@ function showCardEditor(card) {
     <input type="text" id="edit-heading" value="${currentHeading}">
     <label>Description:</label>
     <textarea id="edit-desc">${currentDesc}</textarea>
+    <label>Due Date:</label>
+    <input type="date" id="edit-due-date" value="${currentDueDate}">
     <div class="editor-buttons">
       <button type="submit">Save</button>
       <button type="button" class="cancel-btn">Cancel</button>
     </div>
   `;
-  
+
   editor.appendChild(form);
   overlay.appendChild(editor);
   document.body.appendChild(overlay);
-  
+
   // Focus on heading input
   const headingInput = document.getElementById('edit-heading');
   headingInput.focus();
   headingInput.select();
-  
+
   // Handle form submission
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const newHeading = document.getElementById('edit-heading').value;
     const newDesc = document.getElementById('edit-desc').value;
-    
+    const newDueDate = document.getElementById('edit-due-date').value;
+
     // Update card content
     card.querySelector('.card-heading').textContent = newHeading;
     card.querySelector('.card-desc').textContent = newDesc;
-    
+    card.setAttribute('data-due-date', newDueDate);
+    const dueDateElement = card.querySelector('.card-due-date');
+    if (dueDateElement) {
+      dueDateElement.textContent = newDueDate ? 'Due: ' + newDueDate : '';
+    }
     // Save data after editing
     saveData();
-    
     // Remove overlay
     overlay.remove();
   });
-  
+
   // Handle Ctrl+Enter to submit
   form.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') {
       form.requestSubmit();
     }
   });
-  
+
   // Handle cancel
   document.querySelector('.cancel-btn').addEventListener('click', () => {
     overlay.remove();
   });
-  
+
   // Close on overlay click
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) {
       overlay.remove();
     }
   });
-  
+
   // Close on Escape key
   document.addEventListener('keydown', function closeOnEscape(e) {
     if (e.key === 'Escape') {
@@ -464,24 +496,24 @@ function initializeInfoPopup() {
   const infoBtn = document.getElementById('info-btn');
   const infoPopup = document.getElementById('info-popup');
   const closeInfoBtn = document.getElementById('close-info');
-  
+
   // Show popup on info button click
   infoBtn.addEventListener('click', () => {
     infoPopup.classList.add('visible');
   });
-  
+
   // Close popup on close button click
   closeInfoBtn.addEventListener('click', () => {
     infoPopup.classList.remove('visible');
   });
-  
+
   // Close popup on overlay click
   infoPopup.addEventListener('click', (e) => {
     if (e.target === infoPopup) {
       infoPopup.classList.remove('visible');
     }
   });
-  
+
   // Close popup on Escape key
   document.addEventListener('keydown', function closeOnEscape(e) {
     if (e.key === 'Escape' && infoPopup.classList.contains('visible')) {
@@ -494,7 +526,7 @@ function initializeInfoPopup() {
 document.addEventListener('DOMContentLoaded', () => {
   // Load saved data first
   loadData();
-  
+
   // Then initialize other features
   initializeDragAndDrop();
   initializeSearch();
